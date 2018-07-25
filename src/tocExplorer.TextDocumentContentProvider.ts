@@ -24,24 +24,28 @@ export class TocNode {
 
 export class TocModel {
 
+    // nodes contains a map from the referenced unique file path to TOC node.
     private nodes: Map<string, TocNode> = new Map<string, TocNode>();
     private rootNode: TocNode;
-    private tocFileName: string;
 
-	constructor(readonly tocFile: vscode.Uri) {
-        // Load the toc file from the specified path
-        this.tocFileName = tocFile.fsPath;
-        var buf = fs.readFileSync(tocFile.fsPath);
+	constructor(readonly tocFile?: vscode.Uri) {
         // Create the root node
         this.rootNode = new TocNode();
-        this.parse(buf.toString());
+        this.nodes.set("", this.rootNode);
 
+        if (tocFile)
+        {
+            this.openToc(tocFile);
+        }
     }
-    
-    private parse(tocString: string) : void
+   
+    public openToc(tocFile: vscode.Uri) : void
     {
+        // Load the toc file from the specified path
+        var buf = fs.readFileSync(tocFile.fsPath);
+
         // parse it into a tree data structure
-        var lines = tocString.split("\n");
+        var lines = buf.toString().split("\n");
         var lineNumber = 0;
         var nestingLevel = 0;
         var currentNode : TocNode = this.rootNode;
@@ -93,7 +97,7 @@ export class TocModel {
                 else
                 {
                     // Pop up a level and add a sibling node to the parent node
-                    var newNode : TocNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode : undefined);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode : undefined);
                     if (currentNode.parentNode) {
                         if (currentNode.parentNode.parentNode) {
                             if (currentNode.parentNode.children) {
@@ -112,10 +116,12 @@ export class TocModel {
         // parse the string as a bare title (a parent without a link)
         // or as a reference to a topic
         // Find first bracket. If not found, assume bare title.
+        var newNode : TocNode;
         let firstBracket = textLine.indexOf("[");
         if (firstBracket === -1) {
             // Not found [], must be a regular node, without a link
-            return new TocNode(textLine);
+            newNode = new TocNode(textLine);
+            return newNode;
         }
         else {
             // Parse a Markdown link
@@ -125,44 +131,80 @@ export class TocModel {
             var firstParen = textLine.indexOf("(");
             var closingParen = textLine.indexOf(")");
             var linkText : string = textLine.substr(firstParen, closingParen);
-            return new TocNode(titleString, vscode.Uri.file(linkText));
+            newNode = new TocNode(titleString, vscode.Uri.file(linkText));
+            this.nodes.set(linkText, newNode);
         }
+        return newNode;
     }
 
-	public connect(): Thenable<TocModel> {
-		return new Promise((c, e) => {
+	public connect(tocUri : vscode.Uri): Thenable<TocModel> {
+		return new Promise((tocModel, e) => {
             // Using the given tocFile
             // Try to open it
             // If it fails, error out
             // If it succeeds, load it.
             //Not sure what the template parameter should be here.
+            if (this.openToc(tocUri)) {
+                tocModel(this);
+            }
+            else {
+                e("Failed to open TOC at path " + tocUri.fsPath);
+            }
 		});
 	}
 
 	public get roots(): Thenable<TocNode[]> {
-		return this.connect().then(toc => {)
-			return new Promise((c, e) => {
-                // generate the list of the root nodes at the top level
-                // Open the file specified by "uri"
-			});
-		});
+        if (this.tocFile) {
+            return this.connect(this.tocFile).then(toc => {
+                return new Promise((c, e) => {
+                    // generate the list of the root nodes at the top level
+                    // Open the file specified by "uri"
+                    if (toc.rootNode.children) {
+                        c(toc.rootNode.children);
+                    }
+                    else {
+                        e("The root node is empty.");
+                    }
+                });
+            });
+        } 
+        else {
+            return new Promise((c, e) => {
+                e("No TOC loaded.");
+            });
+        }
 	}
 
 	public getChildren(node: TocNode): Thenable<TocNode[]> {
-		return this.connect().then(toc => {
-			return new Promise((c, e) => {
-				// given the node get its children
-			});
-		});
+        return new Promise((tocNodes, e) => {
+            // given the node get its children
+            if (node.children)
+            {
+                tocNodes(node.children);
+            }
+            else {
+                e("There are no children for the node " + node.tocTitle);
+            }
+        });
 	}
 
 	public getContent(resource: Uri): Thenable<string> {
-		return this.connect().then(toc => {
-			return new Promise((c, e) => {
-				// Get the content for this node
-			});
-		});
-	}
+        return new Promise((content, e) => {
+            // Get the content (markdown file contents) for this node
+            fs.readFile(resource.fsPath, (err, data) => {
+                if (err) {
+                    e(err);
+                }
+                else {
+                    content(data.toString());
+                }
+            });
+        });
+    }
+    
+    public getNode(resource: Uri): TocNode | undefined {
+        return this.nodes.get(resource.fsPath);
+    }
 }
 
 export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocumentContentProvider {
@@ -193,8 +235,8 @@ export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocum
 		return element ? this.model.getChildren(element) : this.model.roots;
 	}
 
-	public getParent(element: TocNode): TocNode {
-        // TODO get parent node
+	public getParent(element: TocNode): TocNode | undefined {
+            return element.parentNode;
 	}
 
 	public provideTextDocumentContent(uri: Uri, token: CancellationToken): ProviderResult<string> {
@@ -204,11 +246,14 @@ export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocum
 
 export class TocExplorer {
 
-	private tocViewer: TreeView<TocNode>;
+    private tocViewer: TreeView<TocNode>;
+    // So in principle we should support separate TOCs
+    // private tocModels : TocModel[];
+    private tocModel : TocModel;
 
 	constructor(context: vscode.ExtensionContext) {
-		const tocModel = new TocModel(uri); // TODO: how do we get this URI
-		const treeDataProvider = new TocTreeDataProvider(tocModel);
+		this.tocModel = new TocModel(); 
+		const treeDataProvider = new TocTreeDataProvider(this.tocModel);
 		context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
 
 		this.tocViewer = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
@@ -222,20 +267,25 @@ export class TocExplorer {
 		vscode.window.showTextDocument(resource);
 	}
 
-	private reveal(): Thenable<void> {
+	private reveal(): Thenable<void> | undefined {
 		const node = this.getNode();
 		if (node) {
 			return this.tocViewer.reveal(node);
 		}
-		return null;
+		return undefined;
 	}
 
-	private getNode(): TocNode {
+	private getNode(): TocNode | undefined {
 		if (vscode.window.activeTextEditor) {
-			if (vscode.window.activeTextEditor.document.uri.scheme === 'toc') {
-				return { tocTitle: "TODO get toc title", resource: vscode.window.activeTextEditor.document.uri, isParent: false };
-			}
-		}
-		return null;
+            // If this is an open file, we need to get the TOC node info from it.
+            // This is a question of finding a TOC when a given file is open.
+            // We can get the file system uri for this file
+            // and find the TOC.md file associated with it. 
+            // and the node within that TOC that corresponds to this topic.
+            // I think we have to use the TocModel's map data structure to get this
+            var node = this.tocModel.getNode(vscode.window.activeTextEditor.document.uri);
+            return node;
+            }
+		return undefined;
 	}
 }

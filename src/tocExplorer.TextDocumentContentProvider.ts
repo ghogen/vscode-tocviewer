@@ -350,20 +350,19 @@ export class TocExplorer {
                         }
                     }
                     return;
-                }
+                }               
             }
-            else {
-                this.tocModelOrUndefined = new TocModel(vscode.Uri.file(tocPath));
-                var tocModel = this.tocModelOrUndefined;
-                const treeDataProvider = new TocTreeDataProvider(tocModel);
-                this.context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
+            this.tocModelOrUndefined = new TocModel(vscode.Uri.file(tocPath));
+            var tocModel = this.tocModelOrUndefined;
+            const treeDataProvider = new TocTreeDataProvider(tocModel);
+            this.context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
 
-                this.tocViewerOrUndefined = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
+            this.tocViewerOrUndefined = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
 
-                vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
-                vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
-                vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
-            }
+            vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
+            vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
+            vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
+            
         }
     }
 

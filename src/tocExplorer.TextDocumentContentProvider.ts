@@ -2,6 +2,7 @@ import { /*ExtensionContext,*/ EventEmitter, TreeItem, Event, /*window,*/ TreeIt
 import * as vscode from 'vscode';
 import fs = require('fs');
 import { TreeDataProvider } from 'vscode';
+import { Z_FIXED } from 'zlib';
 
 export class TocNode {
 
@@ -280,22 +281,101 @@ export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocum
 
 export class TocExplorer {
 
-    private tocViewer: TreeView<TocNode>;
+    private tocViewerOrUndefined: TreeView<TocNode> | undefined;
     // So in principle we should support separate TOCs
     // private tocModels : TocModel[];
-    private tocModel : TocModel;
+    private tocModelOrUndefined : TocModel | undefined;
+    private tocPathOrUndefined : string | undefined;
+    private subscription : vscode.Disposable;
+    private subscription2 : vscode.Disposable;
+    private context : vscode.ExtensionContext;
+
+    public listener(event: vscode.TextEditor | undefined) : any{
+        if (event && event.document.languageId === "markdown") {
+               this.openToc(event.document);
+        }
+    }
+
+    public listener2(doc: vscode.TextDocument | undefined) : any {
+        if (doc && doc.languageId === "markdown")
+        {
+            this.openToc(doc);
+        }
+    }
+/*
+    function checkIfFile(file, cb) {
+        fs.stat(file, function fsStat(err, stats) {
+          if (err) {
+            if (err.code === 'ENOENT') {
+              return cb(null, false);
+            } else {
+              return cb(err);
+            }
+          }
+          return cb(null, stats.isFile());
+        });
+      }
+      
+      checkIfFile(aPath, function(err, isFile) {
+        if (isFile) {
+          // handle the file
+        }*/
+
+    private openToc(doc : vscode.TextDocument) {
+        vscode.window.showInformationMessage("Opening TOC");
+        // show TOC for that file
+        var fileName : string = doc.fileName;
+        // Get the path part 
+        var folder : string = fileName.substring(0, fileName.lastIndexOf("\\") + 1);
+
+        // Find a TOC at this path
+        if (fs.existsSync(folder + "TOC.md")) {
+            this.tocPathOrUndefined = folder + "TOC.md";  
+        }
+
+        if (fs.existsSync(folder + "toc.md")) {
+            this.tocPathOrUndefined = folder + "toc.md";  
+        }
+
+        if (this.tocPathOrUndefined) {
+            var tocPath = this.tocPathOrUndefined;
+            if (this.tocModelOrUndefined) {
+                // Is this TOC already open?
+                if (this.tocModelOrUndefined.tocFile && this.tocModelOrUndefined.tocFile.fsPath === tocPath) {
+                    // TODO: activate the node for this file
+                    var displayThisNode = this.tocModelOrUndefined.getNode(vscode.Uri.file(doc.fileName));
+                    if (displayThisNode) {
+                        if (this.tocViewerOrUndefined) {
+                            this.tocViewerOrUndefined.reveal(displayThisNode);
+                        }
+                    }
+                    return;
+                }
+            }
+            else {
+                this.tocModelOrUndefined = new TocModel(vscode.Uri.file(tocPath));
+                var tocModel = this.tocModelOrUndefined;
+                const treeDataProvider = new TocTreeDataProvider(tocModel);
+                this.context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
+
+                this.tocViewerOrUndefined = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
+
+                vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
+                vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
+                vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
+            }
+        }
+    }
 
 	constructor(context: vscode.ExtensionContext) {
-        process.stdout.write("Test message\n");
-		this.tocModel = new TocModel(vscode.Uri.file("C:/Users/ghogen/azure-docs/articles/dev-spaces/toc.md")); 
-		const treeDataProvider = new TocTreeDataProvider(this.tocModel);
-		context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
-
-		this.tocViewer = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
-
-		vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
-		vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
-		vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
+        this.context = context;
+        if (vscode.window.activeTextEditor) {
+            this.openToc(vscode.window.activeTextEditor.document);
+        }
+        // start listening
+        this.subscription = vscode.window.onDidChangeActiveTextEditor(this.listener, this);
+        this.subscription2 = vscode.workspace.onDidOpenTextDocument(this.listener2, this);
+        
 	}
 
 	private openResource(resource: vscode.Uri): void {
@@ -305,7 +385,9 @@ export class TocExplorer {
 	private reveal(): Thenable<void> | undefined {
 		const node = this.getNode();
 		if (node) {
-			return this.tocViewer.reveal(node);
+            if (this.tocViewerOrUndefined) {
+                return this.tocViewerOrUndefined.reveal(node);
+            }
 		}
 		return undefined;
 	}
@@ -318,9 +400,17 @@ export class TocExplorer {
             // and find the TOC.md file associated with it. 
             // and the node within that TOC that corresponds to this topic.
             // I think we have to use the TocModel's map data structure to get this
-            var node = this.tocModel.getNode(vscode.window.activeTextEditor.document.uri);
-            return node;
+            if (this.tocModelOrUndefined) {
+                var node = this.tocModelOrUndefined.getNode(vscode.window.activeTextEditor.document.uri);
+                return node;
             }
+        }
 		return undefined;
-	}
+    }
+    
+    private dispose() : void
+    {
+        this.subscription.dispose();
+        this.subscription2.dispose();
+    }
 }

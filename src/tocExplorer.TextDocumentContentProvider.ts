@@ -1,4 +1,4 @@
-import { ExtensionContext, EventEmitter, TreeItem, Event, window, TreeItemCollapsibleState, Uri, commands, workspace, TextDocumentContentProvider, CancellationToken, ProviderResult, TreeView } from 'vscode';
+import { /*ExtensionContext,*/ EventEmitter, TreeItem, Event, /*window,*/ TreeItemCollapsibleState, Uri,/* commands, workspace,*/ TextDocumentContentProvider, CancellationToken, ProviderResult, TreeView } from 'vscode';
 import * as vscode from 'vscode';
 import fs = require('fs');
 import { TreeDataProvider } from 'vscode';
@@ -27,20 +27,27 @@ export class TocModel {
     // nodes contains a map from the referenced unique file path to TOC node.
     private nodes: Map<string, TocNode> = new Map<string, TocNode>();
     private rootNode: TocNode;
+    private openedToc : Boolean;
 
 	constructor(readonly tocFile?: vscode.Uri) {
         // Create the root node
         this.rootNode = new TocNode();
         this.nodes.set("", this.rootNode);
+        this.openedToc = false;
 
         if (tocFile)
         {
             this.openToc(tocFile);
+            this.openedToc = true;
         }
     }
    
-    public openToc(tocFile: vscode.Uri) : void
+    public openToc(tocFile: vscode.Uri) : TocModel
     {
+        // Only run once.
+        if (this.openedToc) {
+            return this;
+        }
         // Load the toc file from the specified path
         var buf = fs.readFileSync(tocFile.fsPath);
 
@@ -62,54 +69,64 @@ export class TocModel {
                 hashCount++;
             }
 
+            if (hashCount === 0)
+            {
+                continue;
+            }
+
             // Check if this will be the root node
-            if (nestingLevel = 0)
+            if (nestingLevel === 0)
             {
                 if (hashCount !== 1)
                 {
                     // error: single node must be at the top.
                 }
                 else {
-                    // Initialize the root node, with the old (empty) rootNode as the parent
-                    this.rootNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), this.rootNode);
-                    currentNode = this.rootNode;
+                    // Initialize the node, with the old (empty) rootNode as the parent
+                    var newNode : TocNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), this.rootNode);
+                    currentNode = newNode;
                 }
             }
             else {
-                if (nestingLevel < hashCount)
+                if (nestingLevel === hashCount - 1)
                 {
                     // Add the first child node
-                    var newNode : TocNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode);
-                    currentNode.children = new Array<TocNode>();
-                    currentNode.children.push(newNode);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode);
+                    currentNode = newNode;
 
                 }
-                else if (nestingLevel = hashCount)
+                else if (nestingLevel === hashCount)
                 {
                     // Add a sibling node
                     newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode);
-                    if (currentNode.parentNode) {
-                        if (currentNode.parentNode.children) {
-                           currentNode.parentNode.children.push(newNode);
-                        }
-                    }
+                    currentNode = newNode;
                 }
-                else
+                else if (nestingLevel === hashCount + 1)
                 {
                     // Pop up a level and add a sibling node to the parent node
                     newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode : undefined);
-                    if (currentNode.parentNode) {
-                        if (currentNode.parentNode.parentNode) {
-                            if (currentNode.parentNode.children) {
-                                currentNode.parentNode.children.push(newNode);
-                            }
-                        }
-                    }
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 2)
+                {
+                    // Pop up a level and add a sibling node to the parent node
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 3)
+                {
+                    // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else {
+                    vscode.window.showErrorMessage("Unsupported level of nesting in TOC.")
                 }
             }
             nestingLevel = hashCount;
             
         } while (++lineNumber < lines.length);
+        return this;
     }
     
     private makeSingleNode(textLine: string, parent? : TocNode) : TocNode {
@@ -119,20 +136,37 @@ export class TocModel {
         var newNode : TocNode;
         let firstBracket = textLine.indexOf("[");
         if (firstBracket === -1) {
-            // Not found [], must be a regular node, without a link
+            // Not found [], must be a regular node, without a link.
             newNode = new TocNode(textLine);
-            return newNode;
+
         }
         else {
             // Parse a Markdown link
+            // TODO: get basePath from somewhere.
+            var basePath = "C:/Users/ghogen/azure-docs/articles/dev-spaces/";
             var closingBracket = textLine.indexOf("]");
-            var titleString : string = textLine.substr(firstBracket, closingBracket);
+            var titleString : string = textLine.substr(firstBracket + 1, closingBracket - 2);
             textLine = textLine.substr(closingBracket + 1); // get remaining part of the string
             var firstParen = textLine.indexOf("(");
             var closingParen = textLine.indexOf(")");
-            var linkText : string = textLine.substr(firstParen, closingParen);
+            var linkText : string = textLine.substr(firstParen + 1, closingParen - 1);
+            linkText = basePath + linkText;
             newNode = new TocNode(titleString, vscode.Uri.file(linkText));
             this.nodes.set(linkText, newNode);
+        }
+        if (parent) {
+            if (parent.children) {
+                // Add the new node to the children list of the parent node.
+                parent.children.push(newNode);
+            }
+            else {
+                // Create a parent node array and add the new node.
+                parent.children = new Array<TocNode>();
+                parent.children.push(newNode);
+                parent.isParent = true;
+            }
+            // Set the parentNode of the current node to the parent
+            newNode.parentNode = parent;
         }
         return newNode;
     }
@@ -221,10 +255,10 @@ export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocum
 
 	public getTreeItem(element: TocNode): TreeItem {
 		return {
-			resourceUri: element.resource,
+			label: element.tocTitle,
 			collapsibleState: element.isParent ? TreeItemCollapsibleState.Collapsed : void 0,
 			command: element.isParent ? void 0 : {
-				command: 'tocExplorer.openTocResource', // TODO: need to create this command
+				command: 'tocExplorer.openResource', 
 				arguments: [element.resource],
 				title: 'Open TOC Resource'
 			}
@@ -252,7 +286,8 @@ export class TocExplorer {
     private tocModel : TocModel;
 
 	constructor(context: vscode.ExtensionContext) {
-		this.tocModel = new TocModel(); 
+        process.stdout.write("Test message\n");
+		this.tocModel = new TocModel(vscode.Uri.file("C:/Users/ghogen/azure-docs/articles/dev-spaces/toc.md")); 
 		const treeDataProvider = new TocTreeDataProvider(this.tocModel);
 		context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));
 

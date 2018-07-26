@@ -11,20 +11,38 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.sayHello"
+        "onCommand:extension.tocViewer"
     ],
     "main": "./out/extension",
     "contributes": {
         "commands": [
             {
-                "command": "extension.sayHello",
-                "title": "Hello World"
+                "command": "extension.tocViewer",
+                "title": "TOC Viewer"
             }
-        ]
+        ],
+        "viewContainers": {
+            "activitybar": [
+                {
+                    "id": "toc",
+                    "title": "TOC Explorer",
+                    "icon": "media/toc.svg"
+                }
+            ]
+        },
+        "views": {
+            "toc": [
+                {
+                    "id": "tocExplorer",
+                    "name": "TOC"
+                }
+            ]
+        }
+    
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
+        "compile": "tsc -watch -p ./",
         "watch": "tsc -watch -p ./",
         "postinstall": "node ./node_modules/vscode/bin/install",
         "test": "npm run compile && node ./node_modules/vscode/bin/test"

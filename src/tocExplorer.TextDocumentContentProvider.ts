@@ -287,6 +287,9 @@ export class TocExplorer {
     private tocModelOrUndefined : TocModel | undefined;
     private tocPathOrUndefined : string | undefined;
     private subscription : vscode.Disposable;
+    private subscriptionOpenResource : vscode.Disposable | undefined;
+    private subscriptionRefresh : vscode.Disposable | undefined;
+    private subscriptionRevealResource : vscode.Disposable | undefined;
     //private subscription2 : vscode.Disposable;
     private context : vscode.ExtensionContext;
 
@@ -330,9 +333,21 @@ export class TocExplorer {
 
             this.tocViewerOrUndefined = vscode.window.createTreeView('tocExplorer', { treeDataProvider });
 
-            vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
-            vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
-            vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
+            if (this.subscriptionRefresh)
+            {
+                this.subscriptionRefresh.dispose();
+            }
+            if (this.subscriptionOpenResource)
+            {
+                this.subscriptionOpenResource.dispose();
+            }
+            if (this.subscriptionRevealResource)
+            {
+                this.subscriptionRevealResource.dispose();
+            }
+            this.subscriptionRefresh = vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
+            this.subscriptionOpenResource = vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
+            this.subscriptionRevealResource = vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
             this.reveal();
         }
     }
@@ -378,5 +393,14 @@ export class TocExplorer {
     private dispose() : void
     {
         this.subscription.dispose();
+        if (this.subscriptionOpenResource) {
+            this.subscriptionOpenResource.dispose();
+        }
+        if (this.subscriptionRefresh) {
+            this.subscriptionRefresh.dispose();
+        }
+        if (this.subscriptionRevealResource) {
+            this.subscriptionRevealResource.dispose();
+        }
     }
 }

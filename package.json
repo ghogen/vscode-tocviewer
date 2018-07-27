@@ -4,6 +4,7 @@
     "description": "View Markdown TOC.md files",
     "version": "0.0.1",
     "publisher": "docs",
+    "repository": "https://github.com/ghogen/vscode-tocviewer",
     "engines": {
         "vscode": "^1.25.0"
     },
@@ -41,7 +42,6 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
         "compile": "tsc -watch -p ./",
         "watch": "tsc -watch -p ./",
         "postinstall": "node ./node_modules/vscode/bin/install",

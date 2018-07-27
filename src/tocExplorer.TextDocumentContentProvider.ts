@@ -283,7 +283,12 @@ export class TocModelYaml implements TocModel {
             var uri : vscode.Uri | undefined = undefined;
             // Get URI
             if (item.href) {
-                uri = Uri.file(item.href);
+                if (this.tocFile)
+                {
+                    var folder = this.tocFile.fsPath.substring(0, this.tocFile.fsPath.lastIndexOf("\\")+1);
+                    var fullPath = folder + item.href;
+                    uri = Uri.file(fullPath);
+                }
             } 
             // Get TocNode
             var node : TocNode =  new TocNode(item.name, uri);

@@ -1,6 +1,7 @@
 import { /*ExtensionContext,*/ EventEmitter, TreeItem, Event, /*window,*/ TreeItemCollapsibleState, Uri,/* commands, workspace,*/ TextDocumentContentProvider, CancellationToken, ProviderResult, TreeView } from 'vscode';
 import * as vscode from 'vscode';
 import fs = require('fs');
+import YAML = require("yamljs");
 import { TreeDataProvider } from 'vscode';
 import { Z_FIXED } from 'zlib';
 
@@ -143,8 +144,7 @@ export class TocModel {
         }
         else {
             // Parse a Markdown link
-            // TODO: get basePath from somewhere.
-            var basePath = "C:/Users/ghogen/azure-docs/articles/dev-spaces/";
+            var basePath = this.tocFile ? this.tocFile.fsPath.substring(0, this.tocFile.fsPath.lastIndexOf("\\") + 1) : ".";
             var closingBracket = textLine.indexOf("]");
             var titleString : string = textLine.substr(firstBracket + 1, closingBracket - 2);
             textLine = textLine.substr(closingBracket + 1); // get remaining part of the string
@@ -287,7 +287,7 @@ export class TocExplorer {
     private tocModelOrUndefined : TocModel | undefined;
     private tocPathOrUndefined : string | undefined;
     private subscription : vscode.Disposable;
-    private subscription2 : vscode.Disposable;
+    //private subscription2 : vscode.Disposable;
     private context : vscode.ExtensionContext;
 
     public listener(event: vscode.TextEditor | undefined) : any{
@@ -295,31 +295,6 @@ export class TocExplorer {
                this.openToc(event.document);
         }
     }
-
-    public listener2(doc: vscode.TextDocument | undefined) : any {
-        if (doc && doc.languageId === "markdown")
-        {
-            this.openToc(doc);
-        }
-    }
-/*
-    function checkIfFile(file, cb) {
-        fs.stat(file, function fsStat(err, stats) {
-          if (err) {
-            if (err.code === 'ENOENT') {
-              return cb(null, false);
-            } else {
-              return cb(err);
-            }
-          }
-          return cb(null, stats.isFile());
-        });
-      }
-      
-      checkIfFile(aPath, function(err, isFile) {
-        if (isFile) {
-          // handle the file
-        }*/
 
     private openToc(doc : vscode.TextDocument) {
         vscode.window.showInformationMessage("Opening TOC");
@@ -329,10 +304,6 @@ export class TocExplorer {
         var folder : string = fileName.substring(0, fileName.lastIndexOf("\\") + 1);
 
         // Find a TOC at this path
-        if (fs.existsSync(folder + "TOC.md")) {
-            this.tocPathOrUndefined = folder + "TOC.md";  
-        }
-
         if (fs.existsSync(folder + "toc.md")) {
             this.tocPathOrUndefined = folder + "toc.md";  
         }
@@ -362,7 +333,7 @@ export class TocExplorer {
             vscode.commands.registerCommand('tocExplorer.refresh', () => treeDataProvider.refresh());
             vscode.commands.registerCommand('tocExplorer.openResource', resource => this.openResource(resource));
             vscode.commands.registerCommand('tocExplorer.revealResource', () => this.reveal());
-            
+            this.reveal();
         }
     }
 
@@ -373,12 +344,15 @@ export class TocExplorer {
         }
         // start listening
         this.subscription = vscode.window.onDidChangeActiveTextEditor(this.listener, this);
-        this.subscription2 = vscode.workspace.onDidOpenTextDocument(this.listener2, this);
-        
+       
 	}
 
 	private openResource(resource: vscode.Uri): void {
-		vscode.window.showTextDocument(resource);
+        vscode.workspace.openTextDocument(resource).then(document => {
+            this.openToc(document);
+        });
+
+        vscode.commands.executeCommand('markdown.showPreview', resource);
 	}
 
 	private reveal(): Thenable<void> | undefined {
@@ -393,12 +367,6 @@ export class TocExplorer {
 
 	private getNode(): TocNode | undefined {
 		if (vscode.window.activeTextEditor) {
-            // If this is an open file, we need to get the TOC node info from it.
-            // This is a question of finding a TOC when a given file is open.
-            // We can get the file system uri for this file
-            // and find the TOC.md file associated with it. 
-            // and the node within that TOC that corresponds to this topic.
-            // I think we have to use the TocModel's map data structure to get this
             if (this.tocModelOrUndefined) {
                 var node = this.tocModelOrUndefined.getNode(vscode.window.activeTextEditor.document.uri);
                 return node;
@@ -410,6 +378,5 @@ export class TocExplorer {
     private dispose() : void
     {
         this.subscription.dispose();
-        this.subscription2.dispose();
     }
 }

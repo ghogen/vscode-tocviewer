@@ -55,6 +55,24 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }
 
+    if (vscode.window.activeTextEditor) {
+
+        previewFirstMarkdown();
+
+    } else {
+
+        vscode.window.onDidChangeActiveTextEditor(()=>{
+
+            previewFirstMarkdown();
+
+        });
+
+    }
+
+
+
+ 
+
 	new TocExplorer(context);
 
     // Use the console to output diagnostic information (console.log) and errors (console.error)

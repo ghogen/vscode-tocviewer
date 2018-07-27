@@ -55,19 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }
 
-    if (vscode.window.activeTextEditor) {
 
-        previewFirstMarkdown();
-
-    } else {
-
-        vscode.window.onDidChangeActiveTextEditor(()=>{
-
-            previewFirstMarkdown();
-
-        });
-
-    }
 
 
 
@@ -88,6 +76,20 @@ export function activate(context: vscode.ExtensionContext) {
         // Display a message box to the user
         vscode.window.showInformationMessage('TOC Viewer activated.');
     });
+
+    if (vscode.window.activeTextEditor) {
+
+        previewFirstMarkdown();
+
+    } else {
+
+        vscode.window.onDidChangeActiveTextEditor(()=>{
+
+            previewFirstMarkdown();
+
+        });
+
+    }
 
     context.subscriptions.push(disposable);
 }

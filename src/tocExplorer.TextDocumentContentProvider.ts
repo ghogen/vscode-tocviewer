@@ -10,21 +10,33 @@ export class TocNode {
     tocTitle: string;
     resource: vscode.Uri | undefined;
     isParent: boolean;
-    children: Array<TocNode> | undefined;
-    parentNode: TocNode | undefined;
-    nextSibling: TocNode | undefined;
+    children?: Array<TocNode> | undefined;
+    parentNode?: TocNode | undefined;
 
     constructor(title?: string, uri? : vscode.Uri) {
         this.tocTitle = title ? title : "";
         this.resource = uri;
         this.isParent = false;
-        this.children = undefined;
-        this.parentNode = undefined;
-        this.nextSibling = undefined;
     }
 }
 
-export class TocModel {
+export interface TocModel {
+
+    tocFile?: vscode.Uri | undefined;
+
+    connect(tocUri : vscode.Uri): Thenable<TocModel>;
+
+	roots: Thenable<TocNode[]>;
+
+	getChildren(node: TocNode): Thenable<TocNode[]>;
+
+	getContent(resource: Uri): Thenable<string>;
+    
+    getNode(resource: Uri): TocNode | undefined;
+    
+}
+
+export class TocModelMd implements TocModel {
 
     // nodes contains a map from the referenced unique file path to TOC node.
     private nodes: Map<string, TocNode> = new Map<string, TocNode>();
@@ -37,14 +49,14 @@ export class TocModel {
         this.nodes.set("", this.rootNode);
         this.openedToc = false;
 
-        if (tocFile)
+        if (this.tocFile)
         {
-            this.openToc(tocFile);
+            this.openToc(this.tocFile);
             this.openedToc = true;
         }
     }
    
-    public openToc(tocFile: vscode.Uri) : TocModel
+    private openToc(tocFile: vscode.Uri) : TocModel
     {
         // Only run once.
         if (this.openedToc) {
@@ -172,7 +184,7 @@ export class TocModel {
         return newNode;
     }
 
-	public connect(tocUri : vscode.Uri): Thenable<TocModel> {
+	public connect(tocUri : vscode.Uri): Thenable<TocModelMd> {
 		return new Promise((tocModel, e) => {
             // Using the given tocFile
             // Try to open it
@@ -242,6 +254,143 @@ export class TocModel {
     }
 }
 
+class TocItem {
+
+   constructor(readonly name : string, readonly href?: string, readonly expanded?: Boolean, readonly items?: TocItem[]) {}
+}
+
+
+export class TocModelYaml implements TocModel {
+     // nodes contains a map from the referenced unique file path to TOC node.
+     private nodes: Map<string, TocNode> = new Map<string, TocNode>();
+     private rootNode: TocNode;
+     private openedToc : Boolean;
+ 
+     constructor(readonly tocFile?: vscode.Uri) {
+         // Create the root node
+         this.rootNode = new TocNode();
+         this.nodes.set("", this.rootNode);
+         this.openedToc = false;
+ 
+         if (tocFile)
+         {
+             this.openToc(tocFile);
+         }
+     }
+    
+     private recurseNodes(tocyaml : TocItem[], parent: TocNode) : void {
+        tocyaml.forEach((item, index) => {
+            var uri : vscode.Uri | undefined = undefined;
+            // Get URI
+            if (item.href) {
+                uri = Uri.file(item.href);
+            } 
+            // Get TocNode
+            var node : TocNode =  new TocNode(item.name, uri);
+            node.parentNode = parent;
+            node.parentNode.isParent = true;
+            // Add to children array
+            if (! node.parentNode.children) {
+                node.parentNode.children = new Array<TocNode>();
+                // workaround an apparent bug.
+                while (node.parentNode.children.length > 0) {
+                    node.parentNode.children.pop();
+                }
+            }
+            node.parentNode.children.push(node);
+            if (uri) {
+                this.nodes.set(uri.fsPath, node);
+            }
+            if (item.items) {
+                this.recurseNodes(item.items, node);
+            }
+        });
+    }
+
+     private openToc(tocFile: vscode.Uri) : TocModel
+     {
+         // Only run once.
+         if (this.openedToc) {
+             return this;
+         }
+         // Load the toc file from the specified path
+         var buf = fs.readFileSync(tocFile.fsPath);
+         var tocyaml : TocItem[] = YAML.load(tocFile.fsPath);
+         this.recurseNodes(tocyaml, this.rootNode);
+         this.openedToc = true;
+         return this;
+     }
+ 
+     public connect(tocUri : vscode.Uri): Thenable<TocModelYaml> {
+         return new Promise((tocModel, e) => {
+             // Using the given tocFile
+             // Try to open it
+             // If it fails, error out
+             // If it succeeds, load it.
+             //Not sure what the template parameter should be here.
+             if (this.openToc(tocUri)) {
+                 tocModel(this);
+             }
+             else {
+                 e("Failed to open TOC at path " + tocUri.fsPath);
+             }
+         });
+     }
+ 
+     public get roots(): Thenable<TocNode[]> {
+         if (this.tocFile) {
+             return this.connect(this.tocFile).then(toc => {
+                 return new Promise((c, e) => {
+                     // generate the list of the root nodes at the top level
+                     // Open the file specified by "uri"
+                     if (toc.rootNode.children) {
+                         c(toc.rootNode.children);
+                     }
+                     else {
+                         e("The root node is empty.");
+                     }
+                 });
+             });
+         } 
+         else {
+             return new Promise((c, e) => {
+                 e("No TOC loaded.");
+             });
+         }
+     }
+ 
+     public getChildren(node: TocNode): Thenable<TocNode[]> {
+         return new Promise((tocNodes, e) => {
+             // given the node get its children
+             if (node.children)
+             {
+                 tocNodes(node.children);
+             }
+             else {
+                 e("There are no children for the node " + node.tocTitle);
+             }
+         });
+     }
+ 
+     public getContent(resource: Uri): Thenable<string> {
+         return new Promise((content, e) => {
+             // Get the content (markdown file contents) for this node
+             fs.readFile(resource.fsPath, (err, data) => {
+                 if (err) {
+                     e(err);
+                 }
+                 else {
+                     content(data.toString());
+                 }
+             });
+         });
+     }
+     
+     public getNode(resource: Uri): TocNode | undefined {
+         return this.nodes.get(resource.fsPath);
+     }
+}
+
 export class TocTreeDataProvider implements TreeDataProvider<TocNode>, TextDocumentContentProvider {
 
 	private _onDidChangeTreeData: EventEmitter<any> = new EventEmitter<any>();
@@ -300,6 +449,8 @@ export class TocExplorer {
     }
 
     private openToc(doc : vscode.TextDocument) {
+        var isYamlToc: Boolean = false;
+
         vscode.window.showInformationMessage("Opening TOC");
         // show TOC for that file
         var fileName : string = doc.fileName;
@@ -309,6 +460,12 @@ export class TocExplorer {
         // Find a TOC at this path
         if (fs.existsSync(folder + "toc.md")) {
             this.tocPathOrUndefined = folder + "toc.md";  
+            isYamlToc = false;
+        }
+
+        if (fs.existsSync(folder + "toc.yml")) {
+            this.tocPathOrUndefined = folder + "toc.yml";
+            isYamlToc = true;
         }
 
         if (this.tocPathOrUndefined) {
@@ -326,7 +483,12 @@ export class TocExplorer {
                     return;
                 }               
             }
-            this.tocModelOrUndefined = new TocModel(vscode.Uri.file(tocPath));
+            if (isYamlToc) {
+                this.tocModelOrUndefined = new TocModelYaml(vscode.Uri.file(tocPath));
+            } else {
+                this.tocModelOrUndefined = new TocModelMd(vscode.Uri.file(tocPath));
+            }
+
             var tocModel = this.tocModelOrUndefined;
             const treeDataProvider = new TocTreeDataProvider(tocModel);
             this.context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('toc', treeDataProvider));

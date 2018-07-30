@@ -11,7 +11,7 @@ export class TocNode {
     resource: vscode.Uri | undefined;
     isParent: boolean;
     children?: Array<TocNode> | undefined;
-    parentNode?: TocNode | undefined;
+    parentNode: TocNode | undefined;
 
     constructor(title?: string, uri? : vscode.Uri) {
         this.tocTitle = title ? title : "";
@@ -41,26 +41,30 @@ export class TocModelMd implements TocModel {
     // nodes contains a map from the referenced unique file path to TOC node.
     private nodes: Map<string, TocNode> = new Map<string, TocNode>();
     private rootNode: TocNode;
-    private openedToc : Boolean;
+    private openedRootToc : Boolean;
 
-	constructor(readonly tocFile?: vscode.Uri) {
+	constructor(readonly rootTocFile?: vscode.Uri) {
         // Create the root node
         this.rootNode = new TocNode();
         this.nodes.set("", this.rootNode);
-        this.openedToc = false;
+        this.openedRootToc = false;
 
-        if (this.tocFile)
+        if (this.rootTocFile)
         {
-            this.openToc(this.tocFile);
-            this.openedToc = true;
+            this.openToc(this.rootTocFile);
+            this.openedRootToc = true;
         }
     }
    
-    private openToc(tocFile: vscode.Uri) : TocModel
+    private openToc(tocFile: vscode.Uri, parentNode? : TocNode) : TocNode
     {
+        if (! parentNode) {
+            parentNode = this.rootNode;
+        }
+
         // Only run once.
-        if (this.openedToc) {
-            return this;
+        if (this.openedRootToc) {
+            return this.rootNode;
         }
         // Load the toc file from the specified path
         var buf = fs.readFileSync(tocFile.fsPath);
@@ -70,6 +74,7 @@ export class TocModelMd implements TocModel {
         var lineNumber = 0;
         var nestingLevel = 0;
         var currentNode : TocNode = this.rootNode;
+        var topLevelNode : TocNode = this.rootNode;
 
         do
         {
@@ -97,7 +102,8 @@ export class TocModelMd implements TocModel {
                 }
                 else {
                     // Initialize the node, with the old (empty) rootNode as the parent
-                    var newNode : TocNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), this.rootNode);
+                    var newNode : TocNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, parentNode);
+                    topLevelNode = newNode;
                     currentNode = newNode;
                 }
             }
@@ -105,45 +111,70 @@ export class TocModelMd implements TocModel {
                 if (nestingLevel === hashCount - 1)
                 {
                     // Add the first child node
-                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode);
                     currentNode = newNode;
 
                 }
                 else if (nestingLevel === hashCount)
                 {
                     // Add a sibling node
-                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode);
                     currentNode = newNode;
                 }
                 else if (nestingLevel === hashCount + 1)
                 {
                     // Pop up a level and add a sibling node to the parent node
-                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode : undefined);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode : undefined);
                     currentNode = newNode;
                 }
                 else if (nestingLevel === hashCount + 2)
                 {
                     // Pop up a level and add a sibling node to the parent node
-                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode : undefined : undefined);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode : undefined : undefined);
                     currentNode = newNode;
                 }
                 else if (nestingLevel === hashCount + 3)
                 {
                     // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
-                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined);
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 4)
+                {
+                    // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 5)
+                {
+                    // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 6)
+                {
+                    // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined : undefined : undefined : undefined);
+                    currentNode = newNode;
+                }
+                else if (nestingLevel === hashCount + 7)
+                {
+                    // Pop up a level and add a sibling node to the parent node - terrible hack, sorry everyone, need to do a recursive version.
+                    newNode = this.makeSingleNode(lines[lineNumber].substr(hashCount), tocFile, currentNode.parentNode ? currentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode ? currentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode.parentNode : undefined : undefined : undefined : undefined : undefined : undefined : undefined);
                     currentNode = newNode;
                 }
                 else {
-                    vscode.window.showErrorMessage("Unsupported level of nesting in TOC.")
+                    // I believe it's the case that the online TOC supports a maximum of 8 levels of nesting.
+                    vscode.window.showErrorMessage("Unsupported level of nesting in TOC.");
                 }
             }
             nestingLevel = hashCount;
             
         } while (++lineNumber < lines.length);
-        return this;
+        return topLevelNode;
     }
     
-    private makeSingleNode(textLine: string, parent? : TocNode) : TocNode {
+    private makeSingleNode(textLine: string, tocFile: vscode.Uri, parent? : TocNode) : TocNode {
         // parse the string as a bare title (a parent without a link)
         // or as a reference to a topic
         // Find first bracket. If not found, assume bare title.
@@ -152,11 +183,10 @@ export class TocModelMd implements TocModel {
         if (firstBracket === -1) {
             // Not found [], must be a regular node, without a link.
             newNode = new TocNode(textLine);
-
         }
         else {
             // Parse a Markdown link
-            var basePath = this.tocFile ? this.tocFile.fsPath.substring(0, this.tocFile.fsPath.lastIndexOf("\\") + 1) : ".";
+            var basePath = tocFile ? tocFile.fsPath.substring(0, tocFile.fsPath.lastIndexOf("\\") + 1) : ".";
             var closingBracket = textLine.indexOf("]");
             var titleString : string = textLine.substr(firstBracket + 1, closingBracket - 2);
             textLine = textLine.substr(closingBracket + 1); // get remaining part of the string
@@ -166,6 +196,9 @@ export class TocModelMd implements TocModel {
             linkText = basePath + linkText;
             newNode = new TocNode(titleString, vscode.Uri.file(linkText));
             this.nodes.set(linkText, newNode);
+            if (linkText.toLowerCase().includes("toc.md")) {
+                var childTocNode = this.openToc(vscode.Uri.file(linkText), newNode);
+            }
         }
         if (parent) {
             if (parent.children) {
@@ -181,6 +214,7 @@ export class TocModelMd implements TocModel {
             // Set the parentNode of the current node to the parent
             newNode.parentNode = parent;
         }
+
         return newNode;
     }
 
@@ -201,8 +235,8 @@ export class TocModelMd implements TocModel {
 	}
 
 	public get roots(): Thenable<TocNode[]> {
-        if (this.tocFile) {
-            return this.connect(this.tocFile).then(toc => {
+        if (this.rootTocFile) {
+            return this.connect(this.rootTocFile).then(toc => {
                 return new Promise((c, e) => {
                     // generate the list of the root nodes at the top level
                     // Open the file specified by "uri"

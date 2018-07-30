@@ -1,0 +1,69 @@
+﻿<Page x:Class="OfflineViewer5.MainPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:OfflineViewer5"
+      mc:Ignorable="d" 
+      d:DesignHeight="450" d:DesignWidth="800"
+      Title="List">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="30"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="400"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="Available_repos" Text="Available Repos" Background="AliceBlue" FontSize="16" Margin="5,5,5,5"/>
+        <TextBlock Grid.Column="1"  x:Name="Installed_repos" Text="Installed Repos" Background="AliceBlue" FontSize="16" Margin="5,5,5,5"/>
+        <StackPanel Grid.Row="1" Orientation="Horizontal">
+            <Button x:Name="GetRepoInfo" FontSize="14" Click="GetRepoInfo_Click" Margin="0,0,635,0">Get Repo Info</Button>
+            <Button x:Name="CloneRepo" FontSize="14" Click="CloneRepo_Click" Margin="0,0,635,0">Clone Repo</Button>
+        </StackPanel>
+
+        <ListView 
+        Height="auto"
+            ItemsSource="{Binding Path=repos_available_for_download}"
+            Margin="10" 
+            x:Name="lv_for_download"
+            Grid.Row="2" >
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="10,2,10,2"/>
+                        <TextBlock Text="{Binding Description}" FontWeight="Bold" Margin="10,2,10,2"/>
+                        <TextBlock Text="{Binding LastUpdated}" FontWeight="Bold" Margin="10,2,10,2"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Grid.Column="1">
+            
+            <Button x:Name="RemoveRepo" FontSize="11" Click="RemoveRepo_Click" Margin="0,0,0,0">Remove Repo</Button>
+            <Button x:Name="UpdateRepo" FontSize="11" Click="UpdateRepo_Click" Margin="0,0,0,0">Update Repo</Button>
+            <Button x:Name="RefreshUI" FontSize="11" Click="RefreshUI_Click" Margin="0,0,0,0">Update List</Button>
+            <Button x:Name="UpdateIndex" FontSize="11" Click="UpdateIndex_Click" Margin="0,0,0,0">Update Index</Button>
+            <Button x:Name="SearchButton" FontSize="11" Click="SearchButton_Click" Margin="0,0,0,0">Search</Button>
+        </StackPanel>
+        <ListView Height="auto"
+            ItemsSource="{Binding Path=repos_installed}"
+            Margin="10" Name="lv_installed_repos"
+            Grid.Row="2" Grid.Column="1">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="10,2,10,2"/>
+                        <TextBlock Text="{Binding Description}" FontWeight="Bold" Margin="10,2,10,2"/>
+                        <TextBlock Text="{Binding LastUpdated}" FontWeight="Bold" Margin="10,2,10,2"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBox x:Name="tbOutput" Height="60" Grid.Row="3" Grid.ColumnSpan="2" Background="AliceBlue">Output</TextBox>
+    </Grid>
+</Page>

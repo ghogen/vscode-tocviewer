@@ -496,15 +496,30 @@ export class TocExplorer {
         // Get the path part 
         var folder : string = fileName.substring(0, fileName.lastIndexOf("\\") + 1);
 
-        // Find a TOC at this path
-        if (fs.existsSync(folder + "toc.md")) {
-            this.tocPathOrUndefined = folder + "toc.md";  
-            isYamlToc = false;
-        }
 
-        if (fs.existsSync(folder + "toc.yml")) {
-            this.tocPathOrUndefined = folder + "toc.yml";
-            isYamlToc = true;
+        var done:Boolean = false;
+        while (! done) {
+            // Find a TOC at this path
+            if (fs.existsSync(folder + "toc.md")) {
+                this.tocPathOrUndefined = folder + "toc.md";  
+                done = true;
+                isYamlToc = false;
+            }
+
+            if (fs.existsSync(folder + "toc.yml")) {
+                this.tocPathOrUndefined = folder + "toc.yml";
+                done = true;
+                isYamlToc = true;
+            }
+
+            if (! done) {
+                // find parent folder
+                if (fs.existsSync(folder + "docfx.json") || (! folder.includes("\\"))) {
+                    // Can't go any higher. File was not found.
+                    done = true;
+                }
+                folder = folder.substring(0, folder.lastIndexOf("\\", folder.length - 2) + 1);
+            }
         }
 
         if (this.tocPathOrUndefined) {
